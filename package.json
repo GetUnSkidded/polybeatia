@@ -1,0 +1,9 @@
+{
+  "name": "beat-api",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "node-web-audio-api": "^0.21.0",
+    "web-audio-beat-detector": "^8.0.0"
+  }
+}
