@@ -2,6 +2,7 @@
   "name": "beat-api",
   "version": "1.0.0",
   "dependencies": {
-    "music-tempo": "1.0.3"
+    "music-tempo": "1.0.3",
+    "mpg123-decoder": "1.0.3"
   }
 }
