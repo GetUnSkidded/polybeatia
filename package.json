@@ -1,4 +1,7 @@
 {
   "name": "beat-api",
-  "version": "1.0.0"
+  "version": "1.0.0",
+  "dependencies": {
+    "music-tempo": "^1.5.0"
+  }
 }
