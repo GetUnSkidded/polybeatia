@@ -1,6 +1,6 @@
 module.exports = async function handler(req, res) {
   try {
-    const { MPEGDecoder } = require('mpg123-decoder');
+    const { MPEGDecoder } = await import('mpg123-decoder');
     const MusicTempo = require('music-tempo');
 
     const { url } = req.query;
@@ -22,8 +22,8 @@ module.exports = async function handler(req, res) {
 
     const mt = new MusicTempo(samples, { sampleRate });
 
-    res.json({ bpm: mt.tempo, offset: mt.beats[0] ?? 0 });
+    res.json({ bpm: mt.tempo, offset: mt.beats[0] || 0 });
   } catch (err) {
-    res.status(500).json({ error: err.message, stack: err.stack });
+    res.status(500).json({ error: err.message });
   }
 };
