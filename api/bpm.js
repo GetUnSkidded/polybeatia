@@ -21,8 +21,8 @@ module.exports = async function handler(req, res) {
       ? channelData[0].map((s, i) => (s + channelData[1][i]) / 2)
       : channelData[0];
 
-    // Low-pass filter at ~150Hz to isolate bass before detection
-    const rc = 1.0 / (150 * 2 * Math.PI);
+    // Low-pass filter at ~60Hz to isolate sub-bass/kick drum range
+    const rc = 1.0 / (60 * 2 * Math.PI);
     const dt = 1.0 / sampleRate;
     const alpha = dt / (rc + dt);
     const filtered = new Float32Array(mono.length);
