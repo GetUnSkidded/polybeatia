@@ -1,13 +1,12 @@
 module.exports = async function handler(req, res) {
   try {
     const { MPEGDecoder } = await import('mpg123-decoder');
-    const MusicTempo = require('music-tempo');
 
     const { url } = req.query;
     if (!url) return res.status(400).json({ error: 'Missing url parameter' });
 
     const response = await fetch(url);
-    if (!response.ok) return res.status(502).json({ error: `Failed to fetch audio: ${response.status}` });
+    if (!response.ok) return res.status(502).json({ error: `Audio fetch failed: ${response.status}` });
 
     const buffer = Buffer.from(await response.arrayBuffer());
 
@@ -21,8 +20,8 @@ module.exports = async function handler(req, res) {
       ? channelData[0].map((s, i) => (s + channelData[1][i]) / 2)
       : channelData[0];
 
-    // Low-pass filter at ~60Hz to isolate sub-bass/kick drum range
-    const rc = 1.0 / (1 * 2 * Math.PI);
+    // Low-pass filter at 80Hz — isolates sub-bass and kick drum fundamentals
+    const rc = 1.0 / (80 * 2 * Math.PI);
     const dt = 1.0 / sampleRate;
     const alpha = dt / (rc + dt);
     const filtered = new Float32Array(mono.length);
@@ -31,12 +30,47 @@ module.exports = async function handler(req, res) {
       filtered[i] = filtered[i - 1] + alpha * (mono[i] - filtered[i - 1]);
     }
 
-    const mt = new MusicTempo(Array.from(filtered), { sampleRate });
+    // Compute RMS energy in 20ms windows with 10ms hop
+    const winSamples = Math.floor(sampleRate * 0.02);
+    const hopSamples = Math.floor(sampleRate * 0.01);
+    const energy = [];
+    for (let i = 0; i + winSamples < filtered.length; i += hopSamples) {
+      let sum = 0;
+      for (let j = i; j < i + winSamples; j++) sum += filtered[j] * filtered[j];
+      energy.push(Math.sqrt(sum / winSamples));
+    }
 
-    // Serialize beat timestamps as comma-separated string (2 decimal places)
-    const beats = mt.beats.map(b => b.toFixed(2)).join(',');
+    // Adaptive threshold: beat must be 1.5x louder than local average over ~500ms
+    // Raise multiplier to get fewer, stronger hits — lower it for more sensitivity
+    const localFrames = 50;
+    const multiplier = 1.5;
+    const minGap = Math.floor(0.25 / (hopSamples / sampleRate)); // min 250ms between beats
 
-    res.json({ bpm: mt.tempo, beats });
+    const peaks = [];
+    let lastPeak = -minGap;
+
+    for (let i = localFrames; i < energy.length - 1; i++) {
+      const localAvg = energy.slice(i - localFrames, i).reduce((a, b) => a + b, 0) / localFrames;
+      const curr = energy[i];
+
+      if (
+        curr > multiplier * localAvg &&
+        curr > energy[i - 1] &&
+        curr >= energy[i + 1] &&
+        i - lastPeak >= minGap
+      ) {
+        peaks.push({ time: (i * hopSamples) / sampleRate, strength: curr });
+        lastPeak = i;
+      }
+    }
+
+    // Normalize strength to 0-1
+    const maxStr = Math.max(...peaks.map(p => p.strength), 1);
+    const beats = peaks.map(p =>
+      `${p.time.toFixed(2)}:${(p.strength / maxStr).toFixed(2)}`
+    ).join(',');
+
+    res.json({ beats, count: peaks.length });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
