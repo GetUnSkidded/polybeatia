@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
       ? channelData[0].map((s, i) => (s + channelData[1][i]) / 2)
       : channelData[0];
 
-    // Low-pass filter at ~60Hz to isolate sub-bass/kick drum range
+    // Low-pass filter to isolate bass
     const rc = 1.0 / (5 * 2 * Math.PI);
     const dt = 1.0 / sampleRate;
     const alpha = dt / (rc + dt);
@@ -33,8 +33,25 @@ module.exports = async function handler(req, res) {
 
     const mt = new MusicTempo(Array.from(filtered), { sampleRate });
 
-    // Serialize beat timestamps as comma-separated string (2 decimal places)
-    const beats = mt.beats.map(b => b.toFixed(2)).join(',');
+    // For each beat, sample peak amplitude in a 50ms window to get strength
+    const windowSamples = Math.floor(sampleRate * 0.05);
+    const peaks = mt.beats.map(beatTime => {
+      const center = Math.floor(beatTime * sampleRate);
+      const start = Math.max(0, center - windowSamples);
+      const end = Math.min(filtered.length, center + windowSamples);
+      let maxAmp = 0;
+      for (let i = start; i < end; i++) {
+        const abs = Math.abs(filtered[i]);
+        if (abs > maxAmp) maxAmp = abs;
+      }
+      return { time: beatTime, strength: maxAmp };
+    });
+
+    // Normalize strength to 0-1
+    const maxStr = Math.max(...peaks.map(p => p.strength), 1e-10);
+    const beats = peaks
+      .map(p => `${p.time.toFixed(2)}:${(p.strength / maxStr).toFixed(2)}`)
+      .join(',');
 
     res.json({ bpm: mt.tempo, beats });
   } catch (err) {
