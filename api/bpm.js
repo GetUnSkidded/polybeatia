@@ -21,7 +21,7 @@ module.exports = async function handler(req, res) {
       : channelData[0];
 
     // Low-pass filter at 80Hz — isolates sub-bass and kick drum fundamentals
-    const rc = 1.0 / (80 * 2 * Math.PI);
+    const rc = 1.0 / (125 * 2 * Math.PI);
     const dt = 1.0 / sampleRate;
     const alpha = dt / (rc + dt);
     const filtered = new Float32Array(mono.length);
