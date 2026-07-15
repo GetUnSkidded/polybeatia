@@ -16,13 +16,27 @@ module.exports = async function handler(req, res) {
     const { channelData, sampleRate } = decoder.decode(buffer);
     decoder.free();
 
-    const samples = channelData.length > 1
-      ? Array.from(channelData[0]).map((s, i) => (s + channelData[1][i]) / 2)
-      : Array.from(channelData[0]);
+    // Mix to mono
+    const mono = channelData.length > 1
+      ? channelData[0].map((s, i) => (s + channelData[1][i]) / 2)
+      : channelData[0];
 
-    const mt = new MusicTempo(samples, { sampleRate });
+    // Low-pass filter at ~150Hz to isolate bass before detection
+    const rc = 1.0 / (150 * 2 * Math.PI);
+    const dt = 1.0 / sampleRate;
+    const alpha = dt / (rc + dt);
+    const filtered = new Float32Array(mono.length);
+    filtered[0] = mono[0];
+    for (let i = 1; i < mono.length; i++) {
+      filtered[i] = filtered[i - 1] + alpha * (mono[i] - filtered[i - 1]);
+    }
 
-    res.json({ bpm: mt.tempo, offset: mt.beats[0] || 0 });
+    const mt = new MusicTempo(Array.from(filtered), { sampleRate });
+
+    // Serialize beat timestamps as comma-separated string (2 decimal places)
+    const beats = mt.beats.map(b => b.toFixed(2)).join(',');
+
+    res.json({ bpm: mt.tempo, beats });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
